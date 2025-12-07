@@ -1,0 +1,6 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Trained model files (binary, can be regenerated)
+*.pkl
