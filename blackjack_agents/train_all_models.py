@@ -37,7 +37,12 @@ def main():
     project_dir = os.path.dirname(base_dir)
     train_csv = os.path.join(project_dir, "blackjack_data/training/blackjack_train_100k.csv")
     dev_csv = os.path.join(project_dir, "blackjack_data/development/blackjack_dev_10k.csv")
-    output_dir = base_dir
+    models_dir = os.path.join(project_dir, "blackjack_outputs/models")
+    results_dir = os.path.join(project_dir, "blackjack_outputs/results")
+
+    # Ensure output directories exist
+    os.makedirs(models_dir, exist_ok=True)
+    os.makedirs(results_dir, exist_ok=True)
 
     #Verify data files exist
     if not os.path.exists(train_csv):
@@ -64,7 +69,7 @@ def main():
         'alignment': alignment_thorp,
         'stats': stats_thorp
     }
-    model_path_thorp = os.path.join(output_dir, "model_thorp_initialized.pkl")
+    model_path_thorp = os.path.join(models_dir, "model_thorp_initialized.pkl")
     agent_thorp.save_model(model_path_thorp)
 
     #-------------------------------------------------------------------------------------------
@@ -84,7 +89,7 @@ def main():
         'alignment': alignment_zero,
         'stats': stats_zero
     }
-    model_path_zero = os.path.join(output_dir, "model_no_heuristic.pkl")
+    model_path_zero = os.path.join(models_dir, "model_no_heuristic.pkl")
     agent_zero.save_model(model_path_zero)
 
     #-------------------------------------------------------------------------------------------
@@ -137,7 +142,7 @@ def main():
             entry['total_updates'] = data['stats'].get('total_updates', 0)
         json_results[name] = entry
 
-    results_path = os.path.join(output_dir, "model_comparison.json")
+    results_path = os.path.join(results_dir, "model_comparison.json")
     with open(results_path, 'w') as f:
         json.dump(json_results, f, indent=2)
     return results
