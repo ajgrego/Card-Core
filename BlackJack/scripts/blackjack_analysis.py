@@ -4,12 +4,12 @@ Blackjack Poster Analysis Script
 Generates figures and statistics for the CardCore AI Blackjack poster.
 
 Outputs:
-    Figures (to blackjack_plots/):
+    Figures (to plots/):
         - alignment_comparison.png: Bar chart comparing alignment across 4 models
         - disagreement_heatmap.png: Where Thorp-initialized agent disagrees with Thorp
         - action_distribution.png: Pie chart of action percentages in test set
 
-    Statistics (to blackjack_plots/):
+    Statistics (to plots/):
         - poster_stats.json: All numerical statistics for the poster
 
 Author: Anthony Grego
@@ -27,8 +27,8 @@ import matplotlib.pyplot as plt
 #Add parent directories to path for imports
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_dir = os.path.dirname(script_dir)
-agents_dir = os.path.join(project_dir, "blackjack_agents")
-heuristics_dir = os.path.join(project_dir, "blackjack_rl_seperated")
+agents_dir = os.path.join(project_dir, "agents")
+heuristics_dir = os.path.join(project_dir, "rl_seperated")
 sys.path.append(agents_dir)
 sys.path.append(heuristics_dir)
 from blackjack_rl_agent import BlackjackRLAgent, ThorpOnlyAgent, BlackjackState #type: ignore
@@ -41,7 +41,7 @@ class LearnedHeuristicAgent:
 
     def __init__(self, q_path=None):
         if q_path is None:
-            q_path = os.path.join(project_dir, "blackjack_data/development/Q_full.csv")
+            q_path = os.path.join(project_dir, "data/development/Q_full.csv")
         self.q_path = q_path
 
     def get_best_action(self, state):
@@ -59,7 +59,7 @@ class LearnedHeuristicAgent:
 
 def load_models():
     #Load all trained models from pickle files
-    models_dir = os.path.join(project_dir, "blackjack_outputs/models")
+    models_dir = os.path.join(project_dir, "outputs/models")
 
     #Load Thorp-initialized model
     thorp_init_agent = BlackjackRLAgent()
@@ -85,7 +85,7 @@ def load_models():
 
 def load_validation_data():
     #Load validation dataset
-    val_path = os.path.join(project_dir, "blackjack_data/validation/blackjack_val_20k.csv")
+    val_path = os.path.join(project_dir, "data/validation/blackjack_val_20k.csv")
     data = []
     with open(val_path, 'r') as f:
         reader = csv.DictReader(f)
@@ -346,7 +346,7 @@ def main():
     print("-" * 70)
 
     #Output directory
-    output_dir = os.path.join(project_dir, "blackjack_plots")
+    output_dir = os.path.join(project_dir, "plots")
     os.makedirs(output_dir, exist_ok=True)
 
     #Load models and data

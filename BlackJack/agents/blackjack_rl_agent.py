@@ -402,8 +402,8 @@ def main():
     import os
     base_dir = os.path.dirname(os.path.abspath(__file__))
     project_dir = os.path.dirname(base_dir)
-    train_csv = os.path.join(project_dir, "blackjack_data/training/blackjack_train_100k.csv")
-    dev_csv = os.path.join(project_dir, "blackjack_data/development/blackjack_dev_10k.csv")
+    train_csv = os.path.join(project_dir, "data/training/blackjack_train_100k.csv")
+    dev_csv = os.path.join(project_dir, "data/development/blackjack_dev_10k.csv")
     agent = BlackjackRLAgent(prior_strength=10)
     agent.initialize_q_table_from_thorp()
     agent.train_from_csv(train_csv)

@@ -25,10 +25,10 @@ def main():
     #Paths
     base_dir = os.path.dirname(os.path.abspath(__file__))
     project_dir = os.path.dirname(base_dir)
-    train_csv = os.path.join(project_dir, "blackjack_data/training/blackjack_train_100k.csv")
-    dev_csv = os.path.join(project_dir, "blackjack_data/validation/blackjack_val_20k.csv")
-    models_dir = os.path.join(project_dir, "blackjack_outputs/models")
-    results_dir = os.path.join(project_dir, "blackjack_outputs/results")
+    train_csv = os.path.join(project_dir, "data/training/blackjack_train_100k.csv")
+    dev_csv = os.path.join(project_dir, "data/validation/blackjack_val_20k.csv")
+    models_dir = os.path.join(project_dir, "outputs/models")
+    results_dir = os.path.join(project_dir, "outputs/results")
 
     # Ensure output directories exist
     os.makedirs(models_dir, exist_ok=True)
