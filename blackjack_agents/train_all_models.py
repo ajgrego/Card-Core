@@ -6,6 +6,14 @@ This script trains and evaluates three blackjack agent variants to demonstrate t
     2. No-Heuristic Model — Q-values start at 0, trained from scratch
     3. Heuristic-Only Model — Pure Thorp strategy, no learning at all
 
+THE COUNTERFACTUAL PROBLEM:
+When training data is generated using Thorp's strategy:
+    - The data only contains Thorp-recommended actions
+    - Those actions often have negative returns (house edge ~2%)
+    - After training: observed actions accumulate negative Q-values
+    - Unobserved actions retain Q=0 (neutral)
+    - Without Bayesian initialization, the agent incorrectly prefers unobserved actions
+
 Author: Anthony Grego
 Date: December 5, 2025
 """
@@ -29,7 +37,7 @@ def main():
     project_dir = os.path.dirname(base_dir)
     train_csv = os.path.join(project_dir, "blackjack_data/training/blackjack_train_100k.csv")
     dev_csv = os.path.join(project_dir, "blackjack_data/development/blackjack_dev_10k.csv")
-    output_dir = base_dir 
+    output_dir = base_dir
 
     #Verify data files exist
     if not os.path.exists(train_csv):
@@ -51,11 +59,9 @@ def main():
     agent_thorp.model_type = 'thorp_initialized'
     agent_thorp.train_from_csv(train_csv)
     alignment_thorp = agent_thorp.evaluate_thorp_alignment(dev_csv)
-    performance_thorp = agent_thorp.evaluate_performance(dev_csv)
     stats_thorp = agent_thorp.get_statistics()
     results['thorp_initialized'] = {
         'alignment': alignment_thorp,
-        'performance': performance_thorp,
         'stats': stats_thorp
     }
     model_path_thorp = os.path.join(output_dir, "model_thorp_initialized.pkl")
@@ -67,17 +73,17 @@ def main():
     print("\n" + "-"*80)
     print("MODEL 2: No-Heuristic MC Agent; just learning")
     print("-"*80)
-    
-    agent_zero = BlackjackRLAgent(prior_strength=0)  
+
+    agent_zero = BlackjackRLAgent(prior_strength=0)
     agent_zero.initialize_q_table_zeros()
     agent_zero.model_type = 'no_heuristic'
     agent_zero.train_from_csv(train_csv)
     alignment_zero = agent_zero.evaluate_thorp_alignment(dev_csv)
-    performance_zero = agent_zero.evaluate_performance(dev_csv)
     stats_zero = agent_zero.get_statistics()
-
-    results['no_heuristic'] = {'alignment': alignment_zero, 'performance': performance_zero,'stats': stats_zero}
-
+    results['no_heuristic'] = {
+        'alignment': alignment_zero,
+        'stats': stats_zero
+    }
     model_path_zero = os.path.join(output_dir, "model_no_heuristic.pkl")
     agent_zero.save_model(model_path_zero)
 
@@ -90,42 +96,46 @@ def main():
 
     agent_heuristic = ThorpOnlyAgent()
     alignment_heuristic = agent_heuristic.evaluate_thorp_alignment(dev_csv)
-    performance_heuristic = agent_heuristic.evaluate_performance(dev_csv)
     stats_heuristic = agent_heuristic.get_statistics()
-
-    results['heuristic_only'] = {'alignment': alignment_heuristic,'performance': performance_heuristic,'stats': stats_heuristic}
-    #no model is saved becayse there it pulls from thorps charts directly
+    results['heuristic_only'] = {
+        'alignment': alignment_heuristic,
+        'stats': stats_heuristic
+    }
+    #no model is saved because it pulls from thorps charts directly
 
     #--------------------------------------------------------------------------------------------
     #Comparison
     #------------------------------------------------------------------------------------------------
     print("\n" + "-"*80)
-    print("Comparisons")
+    print("MODEL COMPARISON")
     print("-"*80)
-
-    print(f"\n{'Model':<25} {'Alignment':>12} {'Win Rate':>12} {'EV':>12}")
+    print("\nAlignment with Thorp's Optimal Strategy:")
+    print(f"\n{'Model':<25} {'Alignment':>12} {'Decisions':>12} {'Q-Updates':>12}")
     print("-"*65)
     for name, data in results.items():
         align = data['alignment']['alignment_percentage']
-        win_rate = data['performance']['win_rate']
-        ev = data['performance']['ev_per_hand']
-        print(f"{name:<25} {align:>11.2f}% {win_rate:>11.1f}% {ev:>+11.2f}%")
+        decisions = data['alignment']['total_decisions']
+        updates = data['stats'].get('total_updates', 'N/A')
+        if isinstance(updates, int):
+            print(f"{name:<25} {align:>11.2f}% {decisions:>12} {updates:>12}")
+        else:
+            print(f"{name:<25} {align:>11.2f}% {decisions:>12} {updates:>12}")
     print("-"*65)
 
     #Save comparative results to JSON for later analysis
     json_results = {}
     for name, data in results.items():
-        json_results[name] = {
+        entry = {
             'alignment_pct': data['alignment']['alignment_percentage'],
             'total_decisions': data['alignment']['total_decisions'],
-            'win_rate': data['performance']['win_rate'],
-            'loss_rate': data['performance']['loss_rate'],
-            'push_rate': data['performance']['push_rate'],
-            'ev_per_hand': data['performance']['ev_per_hand'],
-            'hands_evaluated': data['performance']['hands_evaluated'],
             'model_type': data['stats'].get('model_type', name),
             'trainable': data['stats'].get('trainable', False)
         }
+        #Add RL-specific metrics for trainable models
+        if data['stats'].get('trainable', False):
+            entry['episodes_seen'] = data['stats'].get('episodes_seen', 0)
+            entry['total_updates'] = data['stats'].get('total_updates', 0)
+        json_results[name] = entry
 
     results_path = os.path.join(output_dir, "model_comparison.json")
     with open(results_path, 'w') as f:

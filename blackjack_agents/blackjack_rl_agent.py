@@ -291,85 +291,15 @@ class BlackjackRLAgent:
         print(f"{'-'*60}")
         return results
 
-    def evaluate_performance(self, test_csv_path: str) -> Dict:
-        #Evaluate win/loss/EV statistics on test data.
-        hands_evaluated = 0
-        wins = losses = pushes = 0
-        total_profit = 0.0
-        ev_by_action = defaultdict(lambda: {'sum': 0.0, 'count': 0})
-        ev_by_true_count = defaultdict(lambda: {'sum': 0.0, 'count': 0})
-        with open(test_csv_path, 'r') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                win_value = float(row['win'])
-                true_count = int(row['true_count'])
-                actions = ast.literal_eval(row.get('actions_taken', '[]'))
-                if actions and actions[0]:
-                    first_action = actions[0][0] if isinstance(actions[0], list) else actions[0]
-                    if first_action == 'N' and len(actions[0]) > 1:
-                        first_action = actions[0][1]
-                else:
-                    first_action = 'S'
-                if win_value > 0:
-                    wins += 1
-                elif win_value < 0:
-                    losses += 1
-                else:
-                    pushes += 1
-                total_profit += win_value
-                hands_evaluated += 1
-                if first_action in self.ACTIONS:
-                    ev_by_action[first_action]['sum'] += win_value
-                    ev_by_action[first_action]['count'] += 1
-
-                tc_bucket = (true_count // 2) * 2
-                ev_by_true_count[tc_bucket]['sum'] += win_value
-                ev_by_true_count[tc_bucket]['count'] += 1
-        win_rate = (wins / hands_evaluated * 100) if hands_evaluated > 0 else 0
-        loss_rate = (losses / hands_evaluated * 100) if hands_evaluated > 0 else 0
-        push_rate = (pushes / hands_evaluated * 100) if hands_evaluated > 0 else 0
-        ev_per_hand = (total_profit / hands_evaluated) if hands_evaluated > 0 else 0
-
-        ev_by_action_final = {a: {'ev': d['sum']/d['count'], 'count': d['count']}
-                             for a, d in ev_by_action.items() if d['count'] > 0}
-        ev_by_true_count_final = {tc: {'ev': d['sum']/d['count'], 'count': d['count']}
-                                  for tc, d in sorted(ev_by_true_count.items()) if d['count'] > 0}
-
-        results = {
-            'hands_evaluated': hands_evaluated,
-            'wins': wins, 'losses': losses, 'pushes': pushes,
-            'win_rate': win_rate, 'loss_rate': loss_rate, 'push_rate': push_rate,
-            'ev_per_hand': ev_per_hand * 100,
-            'total_profit': total_profit,
-            'ev_by_action': ev_by_action_final,
-            'ev_by_true_count': ev_by_true_count_final
-        }
-
-        print(f"\n{'-'*60}")
-        print(f"PERFORMANCE EVALUATION")
-        print(f"{'-'*60}")
-        print(f"Hands Evaluated: {hands_evaluated}")
-        print(f"Wins: {wins} ({win_rate:.1f}%)")
-        print(f"Losses: {losses} ({loss_rate:.1f}%)")
-        print(f"Pushes: {pushes} ({push_rate:.1f}%)")
-        print(f"EV per Hand: {ev_per_hand * 100:+.2f}%")
-        print(f"{'-'*60}\n")
-
-        return results
-
     def get_statistics(self) -> Dict:
-        #Get statistics about the learned policy.
+        #Get statistics about the learned policy
         observed_pairs = len([k for k in self.visit_counts if self.visit_counts[k] > 0])
-        avg_visits = np.mean([v for v in self.visit_counts.values() if v > 0]) if observed_pairs > 0 else 0
-
         return {
             'model_type': self.model_type,
             'prior_strength': self.prior_strength,
-            'total_updates': self.total_updates,
             'episodes_seen': self.episodes_seen,
-            'q_table_size': len(self.Q),
+            'total_updates': self.total_updates,
             'observed_state_action_pairs': observed_pairs,
-            'avg_visits_per_observed_pair': avg_visits,
             'trainable': True
         }
 
@@ -423,84 +353,47 @@ class ThorpOnlyAgent:
             can_surrender=True
         )
 
-    def evaluate_performance(self, test_csv_path: str) -> Dict:
-        """Evaluate win/loss/EV statistics on test data."""
-        print(f"\nEvaluating performance using: {test_csv_path}")
-
-        hands_evaluated = 0
-        wins = losses = pushes = 0
-        total_profit = 0.0
-        ev_by_action = defaultdict(lambda: {'sum': 0.0, 'count': 0})
-        ev_by_true_count = defaultdict(lambda: {'sum': 0.0, 'count': 0})
-
+    def evaluate_thorp_alignment(self, test_csv_path: str) -> Dict:
+        #Evaluate alignment with Thorp's strategy (should be 100% by definition)
+        total_decisions = 0
+        matches = 0
         with open(test_csv_path, 'r') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                win_value = float(row['win'])
+                hand = ast.literal_eval(row['initial_hand'])
+                total = sum(hand)
+                is_soft = 11 in hand
+                dealer_up = int(row['dealer_up'])
                 true_count = int(row['true_count'])
-                actions = ast.literal_eval(row.get('actions_taken', '[]'))
-
-                if actions and actions[0]:
-                    first_action = actions[0][0] if isinstance(actions[0], list) else actions[0]
-                    if first_action == 'N' and len(actions[0]) > 1:
-                        first_action = actions[0][1]
-                else:
-                    first_action = 'S'
-
-                if win_value > 0:
-                    wins += 1
-                elif win_value < 0:
-                    losses += 1
-                else:
-                    pushes += 1
-
-                total_profit += win_value
-                hands_evaluated += 1
-
-                if first_action in self.ACTIONS:
-                    ev_by_action[first_action]['sum'] += win_value
-                    ev_by_action[first_action]['count'] += 1
-
-                tc_bucket = (true_count // 2) * 2
-                ev_by_true_count[tc_bucket]['sum'] += win_value
-                ev_by_true_count[tc_bucket]['count'] += 1
-
-        win_rate = (wins / hands_evaluated * 100) if hands_evaluated > 0 else 0
-        loss_rate = (losses / hands_evaluated * 100) if hands_evaluated > 0 else 0
-        push_rate = (pushes / hands_evaluated * 100) if hands_evaluated > 0 else 0
-        ev_per_hand = (total_profit / hands_evaluated) if hands_evaluated > 0 else 0
-
-        ev_by_action_final = {a: {'ev': d['sum']/d['count'], 'count': d['count']}
-                             for a, d in ev_by_action.items() if d['count'] > 0}
-        ev_by_true_count_final = {tc: {'ev': d['sum']/d['count'], 'count': d['count']}
-                                  for tc, d in sorted(ev_by_true_count.items()) if d['count'] > 0}
-
+                state = BlackjackState(total, is_soft, dealer_up, true_count)
+                agent_action = self.get_best_action(state)
+                pair_value = hand[0] if len(hand) == 2 and hand[0] == hand[1] else None
+                thorp_action = get_thorp_action(
+                    total, is_soft, dealer_up, pair_value,
+                    can_double=True, can_split=False, can_surrender=True
+                )
+                total_decisions += 1
+                if agent_action == thorp_action:
+                    matches += 1
+        alignment_pct = (matches / total_decisions * 100) if total_decisions > 0 else 0
         results = {
-            'hands_evaluated': hands_evaluated,
-            'wins': wins, 'losses': losses, 'pushes': pushes,
-            'win_rate': win_rate, 'loss_rate': loss_rate, 'push_rate': push_rate,
-            'ev_per_hand': ev_per_hand * 100,
-            'total_profit': total_profit,
-            'ev_by_action': ev_by_action_final,
-            'ev_by_true_count': ev_by_true_count_final
+            'total_decisions': total_decisions,
+            'matches': matches,
+            'alignment_percentage': alignment_pct
         }
-
+        print(f"\n{'-'*60}")
+        print(f"Thorp's Strategy Alignment")
         print(f"{'-'*60}")
-        print(f"PERFORMANCE EVALUATION")
+        print(f"Total Decisions: {total_decisions}")
+        print(f"Matching Thorp: {matches}")
+        print(f"Alignment: {alignment_pct:.2f}%")
         print(f"{'-'*60}")
-        print(f"Hands Evaluated: {hands_evaluated}")
-        print(f"Wins: {wins} ({win_rate:.1f}%)")
-        print(f"Losses: {losses} ({loss_rate:.1f}%)")
-        print(f"EV per Hand: {ev_per_hand * 100:+.2f}%")
-        print(f"{'-'*60}\n")
-
         return results
 
     def get_statistics(self) -> Dict:
-        #Return basic statistics
+        #Return basic statistics for heuristic-only agent
         return {
-            'model_type': 'heuristic_only',
-            'episodes_seen': self.episodes_seen,
+            'model_type': self.model_type,
             'trainable': False
         }
 
@@ -508,13 +401,15 @@ def main():
     print("\n" + "-"*80)
     print("BLACKJACK RL AGENT")
     print("-"*80)
+    import os
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    project_dir = os.path.dirname(base_dir)
+    train_csv = os.path.join(project_dir, "blackjack_data/training/blackjack_train_100k.csv")
+    dev_csv = os.path.join(project_dir, "blackjack_data/development/blackjack_dev_10k.csv")
     agent = BlackjackRLAgent(prior_strength=10)
     agent.initialize_q_table_from_thorp()
-    train_csv = "/Users/ajgrego/AIHW/B351-giomayo-ajgrego-envu-ethanna/blackjack_data/training/blackjack_train_100k.csv"
-    dev_csv = "/Users/ajgrego/AIHW/B351-giomayo-ajgrego-envu-ethanna/blackjack_data/development/blackjack_dev_10k.csv"
     agent.train_from_csv(train_csv)
     agent.evaluate_thorp_alignment(dev_csv)
-    agent.evaluate_performance(dev_csv)
 
 if __name__ == "__main__":
     main()
