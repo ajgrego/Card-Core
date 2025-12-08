@@ -4,7 +4,8 @@
   "alignment_percentages": {
     "thorp_initialized": 99.235,
     "no_heuristic": 39.71,
-    "heuristic_only": 100.0
+    "heuristic_only": 100.0,
+    "learned_heuristic": 74.24
   },
   "observed_state_action_pairs": 4384,
   "disagreements_by_action_type": {

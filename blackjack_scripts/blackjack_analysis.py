@@ -5,10 +5,8 @@ Generates figures and statistics for the CardCore AI Blackjack poster.
 
 Outputs:
     Figures (to blackjack_plots/):
-        - alignment_comparison.png: Bar chart comparing alignment across 3 models
+        - alignment_comparison.png: Bar chart comparing alignment across 4 models
         - disagreement_heatmap.png: Where Thorp-initialized agent disagrees with Thorp
-        - visit_count_distribution.png: Training data coverage across states
-        - q_value_scatter.png: Initial vs final Q-values for Thorp-initialized model
         - action_distribution.png: Pie chart of action percentages in test set
 
     Statistics (to blackjack_plots/):
@@ -30,9 +28,33 @@ import matplotlib.pyplot as plt
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_dir = os.path.dirname(script_dir)
 agents_dir = os.path.join(project_dir, "blackjack_agents")
+heuristics_dir = os.path.join(project_dir, "blackjack_rl_seperated")
 sys.path.append(agents_dir)
+sys.path.append(heuristics_dir)
 from blackjack_rl_agent import BlackjackRLAgent, ThorpOnlyAgent, BlackjackState #type: ignore
 from thorps_strategy import get_thorp_action #type: ignore
+from blackjackHeuristic import choose_action as learned_choose_action #type: ignore
+
+
+class LearnedHeuristicAgent:
+    #Wrapper for Gio's Q-value based learned heuristic agent
+
+    def __init__(self, q_path=None):
+        if q_path is None:
+            q_path = os.path.join(project_dir, "blackjack_data/development/Q_full.csv")
+        self.q_path = q_path
+
+    def get_best_action(self, state):
+        action = learned_choose_action(
+            total=state.player_total,
+            is_soft=state.is_soft,
+            dealer_up=state.dealer_up,
+            true_count=state.true_count,
+            min_samples=5,
+            default='S',
+            q_path=self.q_path
+        )
+        return action
 
 
 def load_models():
@@ -47,10 +69,18 @@ def load_models():
     no_heuristic_agent = BlackjackRLAgent()
     no_heuristic_agent.load_model(os.path.join(models_dir, "model_no_heuristic.pkl"))
 
-    #Heuristic-only agent
+    #Heuristic-only agent (pure Thorp)
     heuristic_only_agent = ThorpOnlyAgent()
 
-    return {'thorp_initialized': thorp_init_agent, 'no_heuristic': no_heuristic_agent, 'heuristic_only': heuristic_only_agent}
+    #Learned heuristic agent (partner's Q-value based)
+    learned_heuristic_agent = LearnedHeuristicAgent()
+
+    return {
+        'thorp_initialized': thorp_init_agent,
+        'no_heuristic': no_heuristic_agent,
+        'heuristic_only': heuristic_only_agent,
+        'learned_heuristic': learned_heuristic_agent
+    }
 
 
 def load_validation_data():
@@ -84,7 +114,7 @@ def evaluate_alignment(agent, val_data):
         state = BlackjackState(total_val, is_soft, dealer_up, true_count)
         available_actions = ['H', 'S', 'D', 'R']
         if hasattr(agent, 'get_best_action'):
-            if isinstance(agent, ThorpOnlyAgent):
+            if isinstance(agent, (ThorpOnlyAgent, LearnedHeuristicAgent)):
                 agent_action = agent.get_best_action(state)
             else:
                 agent_action = agent.get_best_action(state, available_actions)
@@ -103,7 +133,7 @@ def evaluate_alignment(agent, val_data):
 
 
 def get_disagreement_matrix(agent, val_data):
-    #Build matrix of disagreements by player_total, dealer_upcard
+    #Build matrix of disagreements by player_total, 
     #Matrix: rows = player total (4-21), cols = dealer upcard (2-11)
     disagree_counts = np.zeros((18, 10))  
     total_counts = np.zeros((18, 10))
@@ -139,27 +169,6 @@ def get_disagreement_matrix(agent, val_data):
     return disagree_counts, total_counts
 
 
-def get_visit_count_distribution(agent):
-    #Get distribution of visit counts across state-action pairs
-    visit_counts = []
-    for key, count in agent.visit_counts.items():
-        if count > 0:
-            visit_counts.append(count)
-    return visit_counts
-
-
-def get_q_value_comparison(agent):
-    #Get initial vs final Q-values for the agent
-    initial_q = []
-    final_q = []
-    for key in agent.init_values:
-        init_val = agent.init_values[key]
-        final_val = agent.Q.get(key, init_val)
-        initial_q.append(init_val)
-        final_q.append(final_val)
-    return initial_q, final_q
-
-
 def get_action_distribution(val_data):
     #Get distribution of actions in the test set
     action_counts = defaultdict(int)
@@ -182,15 +191,16 @@ def get_action_distribution(val_data):
 
 def plot_alignment_comparison(alignments, output_dir):
     #Create bar chart comparing alignment percentages
-    models = ['Thorp-Initialized', 'No-Heuristic', 'Heuristic-Only']
+    models = ['Thorp-Initialized RL', 'No-Heuristic RL', 'Pure Thorp', 'Learned Heuristic']
     values = [
         alignments['thorp_initialized']['alignment_pct'],
         alignments['no_heuristic']['alignment_pct'],
-        alignments['heuristic_only']['alignment_pct']
+        alignments['heuristic_only']['alignment_pct'],
+        alignments['learned_heuristic']['alignment_pct']
     ]
-    colors = ['#2ecc71', '#e74c3c', '#3498db']
+    colors = ['#2ecc71', '#e74c3c', '#3498db', '#9b59b6']
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(12, 6))
     bars = ax.bar(models, values, color=colors, edgecolor='black', linewidth=1.2)
 
     #Add value labels on bars
@@ -249,62 +259,6 @@ def plot_disagreement_heatmap(disagree_counts, total_counts, output_dir):
                            ha='center', va='center', color=text_color, fontsize=8)
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 'disagreement_heatmap.png'), dpi=150)
-    plt.close()
-
-def plot_visit_count_distribution(visit_counts, output_dir):
-    #Create histogram of visit counts
-    fig, ax = plt.subplots(figsize=(10, 6))
-    if len(visit_counts) > 0:
-        #Use log scale for x-axis bins
-        max_count = max(visit_counts)
-        bins = np.logspace(0, np.log10(max_count + 1), 50)
-        ax.hist(visit_counts, bins=bins, color='#3498db', edgecolor='black', alpha=0.7)
-        ax.set_xscale('log')
-        ax.set_xlabel('Visit Count (log scale)', fontsize=12)
-        ax.set_ylabel('Number of State-Action Pairs', fontsize=12)
-        ax.set_title('Training Data Coverage: Visit Count Distribution', fontsize=14, fontweight='bold')
-
-        #Add statistics
-        stats_text = f'Total observed pairs: {len(visit_counts):,}\n'
-        stats_text += f'Mean visits: {np.mean(visit_counts):.1f}\n'
-        stats_text += f'Median visits: {np.median(visit_counts):.0f}\n'
-        stats_text += f'Max visits: {max_count:,}'
-        ax.text(0.95, 0.95, stats_text, transform=ax.transAxes,
-                fontsize=10, verticalalignment='top', horizontalalignment='right',
-                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, 'visit_count_distribution.png'), dpi=150)
-    plt.close()
-
-def plot_q_value_scatter(initial_q, final_q, output_dir):
-    #Create scatter plot of initial vs final Q-values."""
-    fig, ax = plt.subplots(figsize=(10, 8))
-
-    #Sample if too many points
-    n_points = len(initial_q)
-    if n_points > 5000:
-        indices = np.random.choice(n_points, 5000, replace=False)
-        init_sample = [initial_q[i] for i in indices]
-        final_sample = [final_q[i] for i in indices]
-    else:
-        init_sample = initial_q
-        final_sample = final_q
-    ax.scatter(init_sample, final_sample, alpha=0.3, s=10, c='#3498db')
-
-    #Add diagonal line (no change)
-    min_val = min(min(initial_q), min(final_q))
-    max_val = max(max(initial_q), max(final_q))
-    ax.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2, label='No change')
-    ax.set_xlabel('Initial Q-Value (from Thorp)', fontsize=12)
-    ax.set_ylabel('Final Q-Value (after training)', fontsize=12)
-    ax.set_title('Q-Value Evolution: Thorp-Initialized Model', fontsize=14, fontweight='bold')
-    ax.legend(loc='upper left')
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, 'q_value_scatter.png'), dpi=150)
     plt.close()
 
 def plot_action_distribution(action_counts, output_dir):
@@ -375,7 +329,8 @@ def calculate_statistics(models, val_data, alignments):
         'alignment_percentages': {
             'thorp_initialized': alignments['thorp_initialized']['alignment_pct'],
             'no_heuristic': alignments['no_heuristic']['alignment_pct'],
-            'heuristic_only': alignments['heuristic_only']['alignment_pct']
+            'heuristic_only': alignments['heuristic_only']['alignment_pct'],
+            'learned_heuristic': alignments['learned_heuristic']['alignment_pct']
         },
         'observed_state_action_pairs': observed_pairs,
         'disagreements_by_action_type': dict(disagreement_counts),
@@ -409,10 +364,6 @@ def main():
     plot_alignment_comparison(alignments, output_dir)
     disagree_counts, total_counts = get_disagreement_matrix(models['thorp_initialized'], val_data)
     plot_disagreement_heatmap(disagree_counts, total_counts, output_dir)
-    visit_counts = get_visit_count_distribution(models['thorp_initialized'])
-    plot_visit_count_distribution(visit_counts, output_dir)
-    initial_q, final_q = get_q_value_comparison(models['thorp_initialized'])
-    plot_q_value_scatter(initial_q, final_q, output_dir)
     action_counts = get_action_distribution(val_data)
     plot_action_distribution(action_counts, output_dir)
 
