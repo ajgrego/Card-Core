@@ -1,0 +1,18 @@
+{
+  "total_hands_trained": 95293,
+  "total_hands_evaluated": 20000,
+  "alignment_percentages": {
+    "thorp_initialized": 99.235,
+    "no_heuristic": 39.71,
+    "heuristic_only": 100.0
+  },
+  "observed_state_action_pairs": 4384,
+  "disagreements_by_action_type": {
+    "agent_H_when_thorp_S": 136,
+    "agent_H_when_thorp_D": 9,
+    "agent_H_when_thorp_R": 3,
+    "agent_D_when_thorp_S": 4,
+    "agent_S_when_thorp_H": 1
+  },
+  "average_q_value_shift": -0.020692789871606814
+}

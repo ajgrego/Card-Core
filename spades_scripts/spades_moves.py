@@ -1,5 +1,3 @@
-# portions of this code adapted from Spades simulator for this project
-
 class  SpadesMoves:
 
     def __init__(self):

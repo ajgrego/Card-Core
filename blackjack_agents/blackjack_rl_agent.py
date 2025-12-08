@@ -11,9 +11,7 @@ This implements RL agents for Blackjack including:
    - Serves as a baseline for comparison
 
 References:
-    - Sutton, R. S., & Barto, A. G. (2018). Reinforcement Learning: An Introduction (2nd ed.). MIT Press.
     - Thorp, E. O. (1962). Beat the Dealer: A Winning Strategy for the Game of Twenty-One. Random House.
-    - Watkins, C. J., & Dayan, P. (1992). Q-learning. Machine Learning, 8(3-4), 279-292.
 
 Author: Anthony Grego
 """

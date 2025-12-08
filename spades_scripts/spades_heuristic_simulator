@@ -4,19 +4,21 @@ from typing import List, Dict, Tuple
 import json, random, itertools
 from collections import defaultdict
 import os
+from spades_moves import SpadesMoves
+from spades_minimax import minimax_choose_move
+from card import Card
+from heuristic_spades_ai import HeuristicAI
+
+heuristic_spades_ai = HeuristicAI()
+
+game_state = SpadesMoves()
 
 
 SUITS = ["C","D","H","S"]  # Spades are trump
 RANKS = list(range(2, 15)) # 11=J, 12=Q, 13=K, 14=A
 
-@dataclass(frozen=True)
-class Card:
-    suit: int   # 0..3
-    rank: int   # 2..14
-    def str(self): return f"{SUITS[self.suit]}{self.rank}"
-
 def deck():
-    return [Card(s, r) for s in range(4) for r in RANKS]
+    return [Card(i) for i in range(52)]
 
 class GameLogger:
     def __init__(self, path_jsonl="spades_logs.jsonl"):
@@ -35,7 +37,7 @@ class GameLogger:
             "event":"deal","game_id":self.game_id,"hand_id":self.hand_id,
             "scores":scores, "seats":seats,
             # store open hands for research; strip later if training imperfect-info
-            "hands": [[c.str() for c in h] for h in hands]
+            "hands": [[f"{c.suite}{c.order}" for c in h] for h in hands]
         }
         self._write(payload)
 
@@ -49,7 +51,7 @@ class GameLogger:
         self._write({
             "event":"play","game_id":self.game_id,"hand_id":self.hand_id,"trick_id":trick_id,
             "seat":seat, "lead_suit":lead_suit, "spades_broken":spades_broken,
-            "legal_moves":[c.str() for c in legal_moves], "chosen":chosen.str(),
+            "legal_moves":[f"{c.suite}{c.order}" for c in legal_moves], "chosen":f"{chosen.suite}{chosen.order}",
             "belief":belief or {}
         })
 
@@ -57,7 +59,7 @@ class GameLogger:
         self._write({
             "event":"trick_end","game_id":self.game_id,"hand_id":self.hand_id,
             "trick_id":trick_id, "winner_seat":winner_seat,
-            "cards":[(s, c.str()) for s,c in cards_played]
+            "cards":[(s, f"{c.suite}{c.order}") for s,c in cards_played]
         })
 
     def log_hand_end(self, tricks_won, bids, score_delta, totals):
@@ -75,26 +77,26 @@ class GameLogger:
 def legal_moves(hand: List[Card], lead_suit: int, spades_broken: bool):
     if lead_suit is None:
         # cannot lead spades unless broken or only spades remain
-        non_spades = [c for c in hand if c.suit != 3]
+        non_spades = [c for c in hand if c.suiteID != 3]
         if non_spades:
             return non_spades
         return hand
-    follows = [c for c in hand if c.suit == lead_suit]
+    follows = [c for c in hand if c.suiteID == lead_suit]
     return follows if follows else hand
 
 def greedy_bot_choose(hand, lead_suit, spades_broken):
     moves = legal_moves(hand, lead_suit, spades_broken)
     # trivial heuristic: if following suit, play the lowest; else dump highest non-spade, else lowest spade
-    following = [c for c in moves if lead_suit is not None and c.suit == lead_suit]
-    if following: return min(following, key=lambda c:c.rank)
-    non_spades = [c for c in moves if c.suit != 3]
-    if non_spades: return max(non_spades, key=lambda c:c.rank)
-    return min(moves, key=lambda c:c.rank)
+    following = [c for c in moves if lead_suit is not None and c.suiteID == lead_suit]
+    if following: return min(following, key=lambda c:c.orderID)
+    non_spades = [c for c in moves if c.suiteID != 3]
+    if non_spades: return max(non_spades, key=lambda c:c.orderID)
+    return min(moves, key=lambda c:c.orderID)
 
 # --- Example self-play loop stub (play phase only) ---
 def play_one_hand(logger: GameLogger, rng: random.Random):
     d = deck(); rng.shuffle(d)
-    hands = [sorted(d[i*13:(i+1)*13], key=lambda c:(c.suit,c.rank)) for i in range(4)]
+    hands = [sorted(d[i*13:(i+1)*13], key=lambda c:(c.suiteID,c.orderID)) for i in range(4)]
     scores = [0,0]  # team NS vs EW (example)
     logger.log_deal(hands, scores)
 
@@ -102,8 +104,8 @@ def play_one_hand(logger: GameLogger, rng: random.Random):
     bids = [3,3,3,3]
     for seat in range(4):
         hand_feats = {
-            "spade_len": sum(1 for c in hands[seat] if c.suit==3),
-            "aces": sum(1 for c in hands[seat] if c.rank==14),
+            "spade_len": sum(1 for c in hands[seat] if c.suiteID==3),
+            "aces": sum(1 for c in hands[seat] if c.orderID==14),
         }
         logger.log_bid(seat, hand_feats, bids[seat], nil=False)
 
@@ -111,14 +113,22 @@ def play_one_hand(logger: GameLogger, rng: random.Random):
     leader = 0
     tricks_won = [0,0,0,0]
 
+    
+    game_state.state["hands"] = hands
+    game_state.state["tricks_won"] = tricks_won
+
     for trick_id in range(13):
         trick = []
         lead_suit = None
         for i in range(4):
             seat = (leader + i) % 4
-            move = greedy_bot_choose(hands[seat], lead_suit, spades_broken)
-            if lead_suit is None: lead_suit = move.suit
-            if move.suit == 3: spades_broken = True
+            if seat == 0:
+                move = heuristic_spades_ai.select_card(hands[seat], lead_suit, spades_broken)
+            else:
+                move = greedy_bot_choose(hands[seat], lead_suit, spades_broken)
+
+            if lead_suit is None: lead_suit = move.suiteID
+            if move.suiteID == 3: spades_broken = True
             logger.log_play(trick_id, seat, legal_moves(hands[seat], lead_suit, spades_broken), move, lead_suit, spades_broken)
             hands[seat].remove(move)
             trick.append((seat, move))
@@ -131,9 +141,9 @@ def play_one_hand(logger: GameLogger, rng: random.Random):
                 winning = (s,c)
             else:
                 ws, wc = winning
-                if (c.suit == 3 and wc.suit != 3) or \
-                   (c.suit == wc.suit and c.rank > wc.rank) or \
-                   (c.suit == 3 and wc.suit == 3 and c.rank > wc.rank):
+                if (c.suiteID == 3 and wc.suiteID != 3) or \
+                   (c.suiteID == wc.suiteID and c.orderID > wc.orderID) or \
+                   (c.suiteID == 3 and wc.suiteID == 3 and c.orderID > wc.orderID):
                     winning = (s,c)
         winner_seat, _ = winning
         tricks_won[winner_seat] += 1
@@ -146,8 +156,8 @@ def play_one_hand(logger: GameLogger, rng: random.Random):
     totals = score_delta  # if per-hand only
     logger.log_hand_end(tricks_won, bids, score_delta, totals)
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
-LOG_PATH = os.path.join(PROJECT_ROOT, "spades_data", "spades_logs.jsonl")
+PROJECT_ROOT = os.path.dirname(__file__)
+LOG_PATH = os.path.join(PROJECT_ROOT, "spades_heuristic_data", "spades_logs.jsonl")
 
 if __name__ == "__main__":
     NUM_GAMES = 1000

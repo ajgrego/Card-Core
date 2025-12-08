@@ -4,8 +4,6 @@
 import random
 import getpass
 from card import Card
-from contract import Contract
-from spades_utils import *
 
 
 class HeuristicAI:
@@ -78,8 +76,7 @@ class HeuristicAI:
         # plays lowest ranked card
         lowest_card = selectable[0]
         for card in selectable:
-            if card.rank.value < lowest_card.rank.value:
+            if card.orderID < lowest_card.orderID:
                 lowest_card = card
 
         return lowest_card
-            
