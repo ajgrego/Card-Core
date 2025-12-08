@@ -2,33 +2,22 @@
   "thorp_initialized": {
     "alignment_pct": 99.37,
     "total_decisions": 10000,
-    "win_rate": 42.199999999999996,
-    "loss_rate": 49.14,
-    "push_rate": 8.66,
-    "ev_per_hand": -0.48,
-    "hands_evaluated": 10000,
     "model_type": "thorp_initialized",
-    "trainable": true
+    "trainable": true,
+    "episodes_seen": 95293,
+    "total_updates": 95293
   },
   "no_heuristic": {
     "alignment_pct": 40.53,
     "total_decisions": 10000,
-    "win_rate": 42.199999999999996,
-    "loss_rate": 49.14,
-    "push_rate": 8.66,
-    "ev_per_hand": -0.48,
-    "hands_evaluated": 10000,
     "model_type": "no_heuristic",
-    "trainable": true
+    "trainable": true,
+    "episodes_seen": 95293,
+    "total_updates": 95293
   },
   "heuristic_only": {
     "alignment_pct": 100.0,
     "total_decisions": 10000,
-    "win_rate": 42.199999999999996,
-    "loss_rate": 49.14,
-    "push_rate": 8.66,
-    "ev_per_hand": -0.48,
-    "hands_evaluated": 10000,
     "model_type": "heuristic_only",
     "trainable": false
   }
